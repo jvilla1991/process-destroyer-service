@@ -1,0 +1,31 @@
+# Ignore Visual Studio files
+.vs/
+*.user
+*.suo
+*.vscode/
+
+# Ignore build artifacts
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Ignore log files
+C:\Program Files\Repos\process-destroyer-service\destroyer-log.log
+destroyer-log.log
+
+# Ignore package restore directories
+packages/
+node_modules/
+
+# Ignore compiled files
+*.cache
+*.db
+*.bak
+*.tmp
+*.swp
+
+# Ignore environment & secrets (optional)
+.env
+secrets.json
