@@ -89,8 +89,19 @@ namespace proccess_destroyer_service
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            Log("Service stopping... unlocking process list file.");
-            UnlockProcessFile();
+            Console.Write("Enter service shutdown password: ");
+            string? inputPassword = Console.ReadLine();
+
+            const string ShutdownPassword = "SuperSecret123";
+
+            if (inputPassword != ShutdownPassword)
+            {
+                Console.WriteLine("Ah, ah, ah. You didn't say the magic word.");
+                return;
+            }
+            const string serviceStoppingMsg = "Correct password entered. Stopping service...";
+            Console.WriteLine(serviceStoppingMsg);
+            Log(serviceStoppingMsg);
             await base.StopAsync(cancellationToken);
         }
 
@@ -98,8 +109,8 @@ namespace proccess_destroyer_service
         {
             try
             {
-                lockFileStream?.Close();
-                lockFileStream = null;
+                lockFS?.Close();
+                lockFS = null;
                 Log($"{processFilePath} is now unlocked for editing.");
             }
             catch (Exception ex)
