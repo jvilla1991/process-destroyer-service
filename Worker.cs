@@ -10,18 +10,41 @@ namespace proccess_destroyer_service
 {
     public class Worker : BackgroundService
     {
-        private readonly string processFilePath = @"C:\Program Files\Repos\process-destroyer-service\processes.txt";
-        private readonly string logFilePath = @"C:\Program Files\Repos\process-destroyer-service\destroyer-log.log";
+        private readonly string baseDirectory;
+        private readonly string processFilePath;
+        private readonly string logFilePath;
         private FileStream? lockFS;
+
+        public Worker()
+        {
+            baseDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
+            processFilePath = Path.Combine(baseDirectory, "processes.txt");
+            logFilePath = Path.Combine(baseDirectory, "destroyer-log.log");
+
+            EnsureRequiredFiles();
+        }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             Log("Service started.");
-            LockProcessFile();
+
+            try
+            {
+                lockFS = new FileStream(processFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                Log($"Locked {processFilePath} for reading. Preventing modifications.");
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to lock {processFilePath}: {ex.Message}");
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var targetProcesses = LoadTargetProcesses();
+                var targetProcesses = File.ReadAllLines(processFilePath)
+                                       .Where(line => !string.IsNullOrWhiteSpace(line))
+                                       .Select(line => line.Trim())
+                                       .ToArray();
+
                 KillTargetProcesses(targetProcesses);
 
                 await Task.Delay(1000 * 30, stoppingToken);
@@ -37,8 +60,7 @@ namespace proccess_destroyer_service
                     var processes = Process.GetProcessesByName(processName);
                     foreach (var process in processes)
                     {
-                        string message = $"[{DateTime.Now}] Killing process: {process.ProcessName} (PID: {process.Id})";
-                        Log(message);
+                        Log($"[{DateTime.Now}] Killing process: {process.ProcessName} (PID: {process.Id})");
                         process.Kill();
                     }
                 }
@@ -49,63 +71,22 @@ namespace proccess_destroyer_service
             }
         }
 
-        private string[] LoadTargetProcesses()
-        {
-            try
-            {
-                if (File.Exists(processFilePath))
-                {
-                    return File.ReadAllLines(processFilePath)
-                               .Where(line => !string.IsNullOrWhiteSpace(line))
-                               .Select(line => line.Trim())
-                               .ToArray();
-                }
-                else
-                {
-                    Log($"[WARNING] {processFilePath} not found! Creating a default one...");
-                    File.WriteAllText(processFilePath, "LeagueClient\nLeague of Legends\n");
-                    return new string[] { "LeagueClient", "League of Legends" };
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"Error loading process list: {ex.Message}");
-                return new string[0];
-            }
-        }
-
-        private void LockProcessFile()
-        {
-            try
-            {
-                lockFS = new FileStream(processFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                Log($"Locked {processFilePath} for reading. Preventing modifications.");
-            }
-            catch (Exception ex)
-            {
-                Log($"Failed to lock {processFilePath}: {ex.Message}");
-            }
-        }
-
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             Log("Service stopping... unlocking process list file.");
-            UnlockProcessFile();
-            await base.StopAsync(cancellationToken);
-        }
 
-        private void UnlockProcessFile()
-        {
             try
             {
-                lockFileStream?.Close();
-                lockFileStream = null;
+                lockFS?.Close();
+                lockFS = null;
                 Log($"{processFilePath} is now unlocked for editing.");
             }
             catch (Exception ex)
             {
                 Log($"Error unlocking {processFilePath}: {ex.Message}");
             }
+
+            await base.StopAsync(cancellationToken);
         }
 
         private void Log(string message)
@@ -121,6 +102,26 @@ namespace proccess_destroyer_service
             catch (Exception ex)
             {
                 Console.WriteLine($"[LOGGING ERROR] Failed to write to log file: {ex.Message}");
+            }
+        }
+
+        private void EnsureRequiredFiles()
+        {
+            if (!File.Exists(logFilePath))
+            {
+                File.Create(logFilePath).Close();
+                Log("Created log file.");
+            }
+            else
+            {
+                File.WriteAllText(logFilePath, String.Empty);
+                Log("Clearing Old Log Entries.");
+            }
+
+            if (!File.Exists(processFilePath))
+            {
+                File.WriteAllText(processFilePath, "LeagueClient\nLeague of Legends\nnotepad\n");
+                Log("Created default processes file");
             }
         }
     }
